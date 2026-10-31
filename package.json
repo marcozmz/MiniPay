@@ -1,0 +1,46 @@
+{
+  "name": "minimercado",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently --kill-others -n API,WEB \"tsx server/index.ts\" \"vite\"",
+    "build": "tsc --noEmit && tsc -p tsconfig.server.json && vite build && npm run build:server",
+    "build:server": "tsc -p tsconfig.build.json && node scripts/build-server.mjs",
+    "start": "node dist-server/server/index.js",
+    "db:migrate": "node dist-server/server/manage.js migrate",
+    "db:bootstrap-admin": "node dist-server/server/manage.js bootstrap-admin",
+    "verify:online": "node scripts/verify-online.mjs",
+    "test:security": "node scripts/test-security.mjs",
+    "test": "node --require ./scripts/node-windows-compat.cjs --import tsx --test tests/*.test.ts",
+    "dev:web": "vite",
+    "dev:api": "tsx server/index.ts",
+    "preview": "vite preview",
+    "db:up": "node scripts/database.mjs up",
+    "db:stop": "node scripts/database.mjs stop",
+    "db:backup": "node scripts/backup.mjs backup",
+    "db:backups": "node scripts/backup.mjs list",
+    "db:restore": "node scripts/backup.mjs restore"
+  },
+  "engines": {"node": "22.x"},
+  "dependencies": {
+    "better-auth": "1.7.14",
+    "drizzle-orm": "0.45.4",
+    "fastify": "5.12.7",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/pg": "8.23.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "concurrently": "10.0.6",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.5"
+  }
+}

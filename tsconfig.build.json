@@ -1,0 +1,6 @@
+{
+ "extends":"./tsconfig.server.json",
+ "compilerOptions":{"noEmit":false,"allowImportingTsExtensions":false,"rootDir":".","outDir":"dist-server","sourceMap":false},
+ "include":["server/**/*.ts","src/domain/**/*.ts"],
+ "exclude":["tests"]
+}

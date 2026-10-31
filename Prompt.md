@@ -1,0 +1,1 @@
+Leia o README.md e o AGENTS.md e continue a primeira etapa pendente.
