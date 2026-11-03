@@ -14,6 +14,8 @@ import { movementLabels, type Product } from "./domain/inventory";
 import { Navigation, navigationItems, type View } from './Navigation';
 import { PwaTools } from './PwaTools';
 import { useVisibleViewport } from './useVisibleViewport';
+import { ScanStockDialog } from './ScanStockDialog';
+import { ProductPhoto } from './ProductPhoto';
 
 const money = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
@@ -29,11 +31,12 @@ function App({state,reload,logout}:{state:Workspace;reload:()=>Promise<void>;log
   const [category,setCategory]=useState('');
   const [editing, setEditing] = useState<Product | null>(null);
   const [catalogEditing,setCatalogEditing]=useState<Product|null>(null);
+  const [scanning, setScanning] = useState(false);
   const [message, setMessage] = useState("");
   const filtered=filterProducts(products,{query,criticalOnly:critical,category});
   const historyRows=[
     ...state.history.filter(h=>h.storeId===store).map(h=>({id:h.id,at:h.at,name:h.name,actor:h.actor??'Administrador local',reason:h.reason,detail:`${movementLabels[h.operation]} · Saldo anterior: ${h.before} · Alteração: ${h.delta>0?'+':''}${h.delta} · Saldo final: ${h.after} unidades`})),
-    ...state.listingHistory.filter(h=>h.storeId===store).map(h=>{const labels:Record<string,string>={name:'Nome',code:'Código',category:'Categoria',price:'Preço',stock:'Estoque',minimum:'Mínimo'};const fields=Object.keys(h.afterValues).filter(key=>JSON.stringify(h.beforeValues[key])!==JSON.stringify(h.afterValues[key]));const show=(key:string,source:Record<string,unknown>)=>source[key]===undefined?'—':key==='price'?money(Number(source[key])):String(source[key]);return {id:h.id,at:h.at,name:String(h.afterValues.name??h.beforeValues.name??'Produto'),actor:h.actor,reason:h.reason,detail:fields.map(key=>`${labels[key]??key}: ${show(key,h.beforeValues)} → ${show(key,h.afterValues)}`).join(' · ')||'Dados do produto atualizados'};}),
+    ...state.listingHistory.filter(h=>h.storeId===store).map(h=>{const labels:Record<string,string>={name:'Nome',code:'Código',category:'Categoria',price:'Preço',stock:'Estoque',minimum:'Mínimo',photo:'Foto'};const fields=Object.keys(h.afterValues).filter(key=>JSON.stringify(h.beforeValues[key])!==JSON.stringify(h.afterValues[key]));const show=(key:string,source:Record<string,unknown>)=>source[key]===undefined?'—':key==='price'?money(Number(source[key])):key==='photo'?'Cadastrada':String(source[key]);return {id:h.id,at:h.at,name:String(h.afterValues.name??h.beforeValues.name??'Produto'),actor:h.actor,reason:h.reason,detail:fields.map(key=>`${labels[key]??key}: ${show(key,h.beforeValues)} → ${show(key,h.afterValues)}`).join(' · ')||'Dados do produto atualizados'};}),
   ].sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
   const exportCsv=async()=>{try{const file=await downloadCsv(store);const url=URL.createObjectURL(file.blob);const link=document.createElement('a');link.href=url;link.download=file.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setMessage('CSV da loja exportado.');}catch(error){setMessage(error instanceof Error?error.message:'Não foi possível exportar esta loja.');}};
   return (
@@ -99,6 +102,7 @@ function App({state,reload,logout}:{state:Workspace;reload:()=>Promise<void>;log
             </article>
           </div>
           <section hidden={view!=='inventory'} className="catalog" aria-label="Produtos">
+            <div className="catalog-toolbar"><button className="primary" disabled={!store} onClick={() => setScanning(true)}>Contar estoque pela câmera</button></div>
             <div className="catalog-toolbar">
               <div className="search-wrap">
                 <span aria-hidden="true">⌕</span>
@@ -141,6 +145,7 @@ function App({state,reload,logout}:{state:Workspace;reload:()=>Promise<void>;log
             {filtered.map((p) => (
               <article className="product-row" key={p.id}>
                 <div className="product-detail">
+                  <ProductPhoto key={p.photoUrl} url={p.photoUrl} name={p.name}/>
                   <div>
                     <h2 className="product-name">{p.name}</h2>
                     <span className="product-code">{p.code}</span>
@@ -195,6 +200,7 @@ function App({state,reload,logout}:{state:Workspace;reload:()=>Promise<void>;log
         </main>
       </div>
       {creating&&<CreateDialog kind={creating} storeId={store} onClose={()=>setCreating(null)} onCreated={reload}/>}
+      {scanning && <ScanStockDialog key={store} storeId={store} storeName={state.stores.find(s => s.id === store)?.name ?? 'Loja selecionada'} role={state.role} onClose={() => setScanning(false)} onChanged={reload}/>}
       {catalogEditing&&<CatalogDialog product={catalogEditing} storeName={state.stores.find(s=>s.id===catalogEditing.storeId)?.name??'loja selecionada'} onClose={()=>setCatalogEditing(null)} onSave={async input=>{await api('/products/update',input);await reload();setMessage('Produto salvo com histórico no servidor.');}}/>}
       {editing && (
         <AdjustmentDialog

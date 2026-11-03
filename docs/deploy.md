@@ -45,7 +45,7 @@ O modo local mantém origem `http://127.0.0.1:5174`, API no loopback e Vite sepa
 
 ## Banco e administrador explícitos
 
-`npm run db:migrate` usa o backend compilado, aplica as seis migrações versionadas em transação com advisory lock e encerra o pool. Repetir o comando não reaplica as versões existentes. A migração histórica 003 preserva seu comportamento de compatibilidade com categorias antigas; nenhuma carga de demonstração é executada pelo comando ou startup.
+`npm run db:migrate` usa o backend compilado, aplica as sete migrações versionadas em transação com advisory lock e encerra o pool. Repetir o comando não reaplica as versões existentes. A migração histórica 003 preserva seu comportamento de compatibilidade com categorias antigas; nenhuma carga de demonstração é executada pelo comando ou startup. A migração 007, adicionada em 03/11/2026, cria o armazenamento privado de fotos no PostgreSQL; detalhes e roteiro de celular em [contagem pela câmera](contagem-camera.md). Foi exercitada em banco separado; não foi aplicada ao ambiente existente por esta entrega.
 
 `npm start` apenas confere conexão, versões esperadas do schema e presença de memberships antes de escutar. Banco vazio, versões pendentes ou incompatíveis causam saída com falha; o servidor não cria schema, não migra, não roda seed e não cria/recria credenciais. `/api/health` consulta o banco/schema e retorna 503 quando indisponível/incompatível, sem divulgar detalhes internos.
 

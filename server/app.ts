@@ -3,7 +3,7 @@ import {ZodError} from 'zod';
 import {z} from 'zod';
 import {assertDatabaseReady,type Database} from './database';
 import {createAuth} from './auth';
-import {snapshot,adjustStock,addStore,addProduct,updateProduct,canAccess,HttpError,type Member} from './inventory';
+import {snapshot,adjustStock,addStore,addProduct,updateProduct,canAccess,lookupCode,readPhoto,HttpError,type Member} from './inventory';
 import {listOperators,createOperator,updateOperatorStores,deactivateOperator,completeFirstAccess} from './users';
 import {exportInventoryCsv} from '../src/domain/catalog';
 import {authRequestHeaders,type ProxyMode} from './proxy';
@@ -33,6 +33,14 @@ export function createApp(db:Database,secret:string,origin='http://127.0.0.1:517
   secured.get('/api/export.csv',async(req,reply)=>{const query=z.object({storeId:z.string().min(1)}).parse(req.query);const member=(req as any).member as Member;await canAccess(db,member,query.storeId);const workspace=await snapshot(db,member);const store=workspace.stores.find((s:any)=>s.id===query.storeId);if(!store)throw new HttpError(404,'Loja não encontrada.');const file=exportInventoryCsv(workspace.products.filter((p:any)=>p.storeId===query.storeId) as any,store.name);return reply.header('Content-Type','text/csv; charset=utf-8').header('Content-Disposition',`attachment; filename="${file.filename}"`).send(file.content);});
   secured.post('/api/stores',async(req,reply)=>reply.code(201).send(await addStore(db,(req as any).member,req.body)));
   secured.post('/api/products',async(req,reply)=>reply.code(201).send(await addProduct(db,(req as any).member,req.body)));
+  secured.post('/api/products/from-scan',{bodyLimit:4*1024*1024+16384},async(req,reply)=>reply.code(201).send(await addProduct(db,(req as any).member,req.body,true)));
+  secured.get('/api/products/lookup',async req=>lookupCode(db,(req as any).member,req.query));
+  secured.get('/api/products/:productId/photo',async(req,reply)=>{
+   const {productId}=z.object({productId:z.coerce.number().int().positive()}).parse(req.params);
+   const {storeId}=z.object({storeId:z.string().min(1)}).parse(req.query);
+   const photo=await readPhoto(db,(req as any).member,productId,storeId);
+   return reply.header('Content-Type',photo.mime).header('Cache-Control','private, no-store').header('Cross-Origin-Resource-Policy','same-origin').send(photo.content);
+  });
   secured.post('/api/products/update',async req=>updateProduct(db,(req as any).member,req.body));
   secured.post('/api/adjustments',async req=>adjustStock(db,(req as any).member,req.body));
  });

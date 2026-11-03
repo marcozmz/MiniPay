@@ -9,6 +9,7 @@ export type Product = {
   minimum: number;
   storeId: string;
   version: number;
+  photoUrl?: string | null;
 };
 export type StockOperation = 'replenishment' | 'loss' | 'count';
 export const operationLabels: Record<StockOperation, string> = {

@@ -1148,3 +1148,12 @@ dialog { max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inse
   .dashboard-empty, .dashboard-panel { padding: 20px; }
   .dashboard-filters input, .dashboard-filters select { font-size: 16px; }
 }
+/* Camera counting uses the existing dialog and selected-store permissions. */
+.scanner-video { width: 100%; max-height: 240px; object-fit: cover; border-radius: 12px; background: #151817; }
+.scanner-video[hidden] { display: none; }
+.product-photo { width: 80px; height: 80px; object-fit: contain; border-radius: 10px; background: #f4f5f3; flex-shrink: 0; }
+.product-detail .product-photo { width: 48px; height: 48px; }
+.photo-pending { font-size: 12px; color: #68716d; }
+.count-quantity { display: flex; align-items: center; gap: 8px; }
+.count-quantity input { min-width: 0; text-align: center; }
+.count-quantity button { min-width: 44px; min-height: 44px; font-size: 22px; }

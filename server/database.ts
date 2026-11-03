@@ -2,7 +2,7 @@ import {Pool,type PoolClient,type QueryResultRow} from 'pg';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {databaseConnectionOptions} from './database-config';
-export const migrationFiles=['001_initial.sql','002_catalog_audit.sql','003_demo_categories.sql','004_user_access.sql','005_stock_operations.sql','006_initial_stock.sql'] as const;
+export const migrationFiles=['001_initial.sql','002_catalog_audit.sql','003_demo_categories.sql','004_user_access.sql','005_stock_operations.sql','006_initial_stock.sql','007_product_photos.sql'] as const;
 export interface SqlExecutor {query<T extends QueryResultRow=QueryResultRow>(sql:string,params?:unknown[]):Promise<{rows:T[]}>;exec(sql:string):Promise<void>}
 export type Database=SqlExecutor&{pool:Pool;transaction<T>(fn:(tx:SqlExecutor)=>Promise<T>):Promise<T>;close():Promise<void>;dropTestSchema():Promise<void>};
 export async function openDatabase(schema='minimercado',options:{migrate?:boolean}={}):Promise<Database>{

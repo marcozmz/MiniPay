@@ -1,6 +1,8 @@
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import type {Database} from './database';
 import {z} from 'zod';
+import {photoSchema,preparePhoto} from './photos';
+import {productCodePattern} from '../src/domain/scanning';
 import {calculateStock} from '../src/domain/inventory';
 export class HttpError extends Error {constructor(public statusCode:number,message:string,public code?:string){super(message);}}
 export type Member={user_id:string;network_id:string;role:'admin'|'operator';active:boolean;password_setup_required:boolean};
@@ -8,13 +10,28 @@ const count=z.number().int().min(0).max(999999);
 export const adjustmentSchema=z.object({id:z.string().uuid(),storeId:z.string().min(1),productId:z.number().int().positive(),expectedVersion:z.number().int().nonnegative(),operation:z.enum(['replenishment','loss','count']),quantity:count,reason:z.string().trim().max(200).default('')}).strict().refine(b=>b.operation==='count'||b.quantity>0,{message:'Informe uma quantidade maior que zero.',path:['quantity']});
 const category=z.enum(['Bebidas','Mercearia','Doces','Higiene']);
 export const storeSchema=z.object({name:z.string().trim().min(2).max(80).refine(name=>!name.includes('\uFFFD'),'O nome contém caracteres corrompidos. Digite novamente usando UTF-8.')}).strict();
-export const productSchema=z.object({id:z.string().uuid().optional(),storeId:z.string().min(1),name:z.string().trim().min(2).max(100),code:z.string().regex(/^\d{8,14}$/),category,price:z.number().int().min(0).max(99999999),initialStock:count.default(0),minimum:count,reason:z.string().trim().max(200).default('')}).strict();
+export const productSchema=z.object({photo:photoSchema.optional(),id:z.string().uuid().optional(),storeId:z.string().min(1),name:z.string().trim().min(2).max(100),code:z.string().regex(productCodePattern),category,price:z.number().int().min(0).max(99999999),initialStock:count.default(0),minimum:count,reason:z.string().trim().max(200).default('')}).strict();
 export const updateProductSchema=z.object({id:z.string().uuid(),productId:z.number().int().positive(),storeId:z.string().min(1),expectedListingVersion:z.number().int().nonnegative(),expectedProductVersion:z.number().int().nonnegative(),name:z.string().trim().min(2).max(100),code:z.string().regex(/^\d{8,14}$/),category,price:z.number().int().min(0).max(99999999),minimum:count,reason:z.string().trim().min(1).max(200)}).strict();
 export async function canAccess(db:Database,m:Member,storeId:string){const r=await db.query(`SELECT id FROM stores s WHERE s.network_id=$1 AND s.id=$2 AND ($3='admin' OR EXISTS(SELECT 1 FROM store_access a WHERE a.user_id=$4 AND a.store_id=s.id AND a.network_id=s.network_id))`,[m.network_id,storeId,m.role,m.user_id]);if(!r.rows.length)throw new HttpError(404,'Loja não encontrada.');}
+export function photoUrl(productId:number,storeId:string){return `/api/products/${productId}/photo?storeId=${encodeURIComponent(storeId)}`;}
+export async function lookupCode(db:Database,m:Member,input:unknown){
+ const b=z.object({storeId:z.string().min(1),code:z.string().regex(productCodePattern)}).strict().parse(input);
+ await canAccess(db,m,b.storeId);
+ const row=(await db.query(`SELECT p.id,p.name,p.code,p.category,p.version AS "productVersion",EXISTS(SELECT 1 FROM product_photos f WHERE f.network_id=p.network_id AND f.product_id=p.id) AS "hasPhoto",l.store_id AS "storeId",l.price,l.stock,l.minimum,l.version FROM products p LEFT JOIN listings l ON l.network_id=p.network_id AND l.product_id=p.id AND l.store_id=$3 WHERE p.network_id=$1 AND p.code=$2`,[m.network_id,b.code,b.storeId])).rows[0];
+ if(!row)return {kind:'unknown',code:b.code};
+ const catalog={id:row.id,name:row.name,code:row.code,category:row.category,productVersion:row.productVersion,photoUrl:row.hasPhoto?photoUrl(row.id,b.storeId):null};
+ return row.storeId?{kind:'active',product:{...catalog,storeId:row.storeId,price:row.price,stock:row.stock,minimum:row.minimum,version:row.version}}:{kind:'catalog',product:catalog};
+}
+export async function readPhoto(db:Database,m:Member,productId:number,storeId:string){
+ await canAccess(db,m,storeId);
+ const photo=(await db.query<{content:Buffer;mime:string}>('SELECT content,mime FROM product_photos WHERE network_id=$1 AND product_id=$2',[m.network_id,productId])).rows[0];
+ if(!photo)throw new HttpError(404,'Foto não encontrada.');
+ return photo;
+}
 export async function snapshot(db:Database,m:Member){
  const stores=(await db.query(`SELECT s.id,s.name,COUNT(l.product_id)::int AS "productCount",COALESCE(SUM(l.stock),0)::int AS units FROM stores s LEFT JOIN listings l ON l.network_id=s.network_id AND l.store_id=s.id WHERE s.network_id=$1 AND ($2='admin' OR EXISTS(SELECT 1 FROM store_access a WHERE a.user_id=$3 AND a.store_id=s.id AND a.network_id=s.network_id)) GROUP BY s.id,s.name ORDER BY s.name`,[m.network_id,m.role,m.user_id])).rows;
  const ids=stores.map((s:any)=>s.id);
- const products=(await db.query(`SELECT p.id,p.name,p.code,p.category,p.version AS "productVersion",l.price,l.stock,l.minimum,l.version,l.store_id AS "storeId" FROM listings l JOIN products p ON p.id=l.product_id AND p.network_id=l.network_id WHERE l.network_id=$1 AND l.store_id=ANY($2::text[]) ORDER BY p.name`,[m.network_id,ids])).rows;
+ const products=(await db.query(`SELECT p.id,p.name,p.code,p.category,p.version AS "productVersion",EXISTS(SELECT 1 FROM product_photos f WHERE f.network_id=p.network_id AND f.product_id=p.id) AS "hasPhoto",l.price,l.stock,l.minimum,l.version,l.store_id AS "storeId" FROM listings l JOIN products p ON p.id=l.product_id AND p.network_id=l.network_id WHERE l.network_id=$1 AND l.store_id=ANY($2::text[]) ORDER BY p.name`,[m.network_id,ids])).rows.map(p=>({...p,photoUrl:p.hasPhoto?photoUrl(p.id,p.storeId):null}));
  const history=(await db.query(`SELECT m.id,m.at,m.store_id AS "storeId",p.name,m.before_stock AS "before",m.after_stock AS "after",m.operation,m.quantity_delta AS delta,m.reason,u.name AS actor FROM movements m JOIN products p ON p.id=m.product_id AND p.network_id=m.network_id JOIN "user" u ON u.id=m.actor_id WHERE m.network_id=$1 AND m.store_id=ANY($2::text[]) ORDER BY m.at DESC LIMIT 200`,[m.network_id,ids])).rows;
  const listingHistory=(await db.query(`SELECT c.id,c.at,c.store_id AS "storeId",c.product_id AS "productId",c.before_values AS "beforeValues",c.after_values AS "afterValues",c.reason,u.name AS actor FROM listing_changes c JOIN "user" u ON u.id=c.actor_id WHERE c.network_id=$1 AND c.store_id=ANY($2::text[]) ORDER BY c.at DESC LIMIT 200`,[m.network_id,ids])).rows;
  return {stores,products,history,listingHistory,role:m.role};
@@ -36,11 +53,13 @@ export async function adjustStock(db:Database,m:Member,input:unknown){
   return {replayed:false};
  });
 }
-export async function addProduct(db:Database,m:Member,input:unknown){
+export async function addProduct(db:Database,m:Member,input:unknown,requireNewPhoto=false){
  if(m.role!=='admin')throw new HttpError(403,'Somente administradores podem cadastrar produtos.');
  const b=productSchema.parse(input);await canAccess(db,m,b.storeId);
  const requestId=b.id??randomUUID();
- const requestJson=JSON.stringify({...b,actor:m.user_id});
+ const {photo,...fields}=b;
+ const preparedPhoto=photo?await preparePhoto(photo):null;
+ const requestJson=JSON.stringify({...fields,...(photo?{photoHash:createHash('sha256').update(photo.mime+':'+photo.data).digest('hex')}:{}),actor:m.user_id});
  return db.transaction(async tx=>{
   if(b.id){
    // An absent catalog row cannot be locked with FOR UPDATE. Serialize replays
@@ -49,13 +68,18 @@ export async function addProduct(db:Database,m:Member,input:unknown){
    const existing=(await tx.query<{request_json:string;product_id:number}>('SELECT request_json,product_id FROM listing_changes WHERE network_id=$1 AND store_id=$2 AND request_id=$3',[m.network_id,b.storeId,b.id])).rows[0];
    if(existing){if(existing.request_json!==requestJson)throw new HttpError(409,'Este identificador já pertence a outro cadastro.');return {id:existing.product_id,replayed:true};}
   }
+  await tx.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',['product-code:'+m.network_id,b.code]);
   let product=(await tx.query<{id:number;name:string;category:string}>('SELECT id,name,category FROM products WHERE network_id=$1 AND code=$2 FOR UPDATE',[m.network_id,b.code])).rows[0];
   if(product&&(product.name!==b.name||product.category!==b.category))throw new HttpError(409,'Este código já está no catálogo com outros dados. Use os dados cadastrados.');
+  const isNew=!product;
+  if(isNew&&requireNewPhoto&&!preparedPhoto)throw new HttpError(400,'A foto é obrigatória para um novo produto neste fluxo.');
+  if(product&&photo)throw new HttpError(409,'O código já existe. Consulte novamente para reaproveitar o cadastro e a foto.');
   if(!product)product=(await tx.query<{id:number;name:string;category:string}>('INSERT INTO products(network_id,name,code,category) VALUES($1,$2,$3,$4) RETURNING id,name,category',[m.network_id,b.name,b.code,b.category])).rows[0];
+  if(isNew&&preparedPhoto)await tx.query('INSERT INTO product_photos(network_id,product_id,content,actor_id) VALUES($1,$2,$3,$4)',[m.network_id,product.id,preparedPhoto,m.user_id]);
   const exists=await tx.query('SELECT 1 FROM listings WHERE store_id=$1 AND product_id=$2',[b.storeId,product.id]);
   if(exists.rows.length)throw new HttpError(409,'Produto já cadastrado nesta loja.');
   await tx.query('INSERT INTO listings(network_id,store_id,product_id,price,stock,minimum) VALUES($1,$2,$3,$4,$5,$6)',[m.network_id,b.storeId,product.id,b.price,b.initialStock,b.minimum]);
-  const after={name:b.name,code:b.code,category:b.category,price:b.price,stock:b.initialStock,minimum:b.minimum};
+  const after={name:b.name,code:b.code,category:b.category,price:b.price,stock:b.initialStock,minimum:b.minimum,...(isNew&&preparedPhoto?{photo:true}:{})};
   await tx.query('INSERT INTO listing_changes(id,request_id,network_id,store_id,product_id,actor_id,before_values,after_values,reason,request_json) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[randomUUID(),requestId,m.network_id,b.storeId,product.id,m.user_id,JSON.stringify({}),JSON.stringify(after),b.reason,requestJson]);
   if(b.initialStock>0)await tx.query("INSERT INTO movements(id,network_id,store_id,product_id,actor_id,before_stock,after_stock,reason,request_json,operation,quantity_delta) VALUES($1,$2,$3,$4,$5,0,$6,$7,$8,'initial',$6)",[requestId,m.network_id,b.storeId,product.id,m.user_id,b.initialStock,b.reason,requestJson]);
   return {id:product.id,replayed:false};
