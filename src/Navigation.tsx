@@ -1,4 +1,5 @@
 export const navigationItems = [
+  { id: 'dashboard', label: 'Dashboard', title: 'Dashboard', icon: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z', adminOnly: true },
   { id: 'inventory', label: 'Produtos', title: 'Produtos e estoque', icon: 'M4 7h16v14H4z M3 3h18v4H3z M9 11h6', adminOnly: false },
   { id: 'history', label: 'Histórico', title: 'Histórico', icon: 'M3 11a9 9 0 1 1 2.6 7 M3 4v7h7 M12 7v5l3 2', adminOnly: false },
   { id: 'stores', label: 'Lojas', title: 'Lojas', icon: 'M3 10l2-7h14l2 7 M3 10h18 M5 10v11h14V10 M9 21v-7h6v7', adminOnly: false },

@@ -62,7 +62,7 @@ export function UserManagement({ stores }: { stores: Store[] }) {
     <form className="user-create-form" onSubmit={create}>
       <h3>Novo operador</h3><label htmlFor="operator-name">Nome</label><input id="operator-name" name="name" minLength={2} maxLength={100} required/>
       <label htmlFor="operator-email">E-mail de acesso</label><input id="operator-email" name="email" type="email" maxLength={254} autoComplete="off" required/>
-      <fieldset><legend>Lojas permitidas</legend><div className="access-checks">{stores.map(store => <label key={store.id}><input type="checkbox" name="new-store" value={store.id}/>{store.name}</label>)}</div></fieldset>
+      <fieldset><legend>Lojas permitidas</legend><div className="access-checks">{stores.map(store => <label key={store.id}><input type="checkbox" name="new-store" value={store.id}/><span>{store.name}</span></label>)}</div></fieldset>
       <button className="primary" type="submit" disabled={busy}>{busy ? 'Criando…' : 'Criar operador'}</button>
     </form>
 
@@ -70,7 +70,7 @@ export function UserManagement({ stores }: { stores: Store[] }) {
       {data.users.map(user => <article className="operator-card" key={user.userId}>
         <div className="operator-heading"><div><h4>{user.name}</h4><p>{user.email}</p></div><span className={user.active ? 'status good' : 'status out'}>{user.active ? 'Ativo' : 'Desativado'}</span></div>
         <p>Lojas: {storeNames(user.storeIds)}</p>{user.passwordSetupRequired && user.active && <p>Troca da senha inicial pendente.</p>}
-        {user.active && <><fieldset><legend>Permitir acesso a</legend><div className="access-checks">{stores.map(store => <label key={store.id}><input type="checkbox" checked={(assignments[user.userId] ?? []).includes(store.id)} onChange={event => setAssignments(current => ({ ...current, [user.userId]: event.target.checked ? [...(current[user.userId] ?? []), store.id] : (current[user.userId] ?? []).filter(id => id !== store.id) }))}/>{store.name}</label>)}</div></fieldset>
+        {user.active && <><fieldset><legend>Permitir acesso a</legend><div className="access-checks">{stores.map(store => <label key={store.id}><input type="checkbox" checked={(assignments[user.userId] ?? []).includes(store.id)} onChange={event => setAssignments(current => ({ ...current, [user.userId]: event.target.checked ? [...(current[user.userId] ?? []), store.id] : (current[user.userId] ?? []).filter(id => id !== store.id) }))}/><span>{store.name}</span></label>)}</div></fieldset>
           <div className="operator-actions"><button className="secondary" type="button" disabled={busyUser === user.userId} onClick={() => void changeStores(user.userId)}>Salvar lojas</button><button className="secondary" type="button" disabled={busyUser === user.userId} onClick={() => void deactivate(user)}>Desativar</button></div></>}
       </article>)}
     </div>

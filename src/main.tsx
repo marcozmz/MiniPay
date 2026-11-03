@@ -7,6 +7,7 @@ import {Login} from "./Login";
 import {CreateDialog} from "./CreateDialog";
 import {CatalogDialog} from "./CatalogDialog";
 import {UserManagement} from "./UserManagement";
+import { Dashboard } from './Dashboard';
 import {FirstAccess} from "./FirstAccess";
 import {filterProducts} from "./domain/catalog";
 import { movementLabels, type Product } from "./domain/inventory";
@@ -60,14 +61,14 @@ function App({state,reload,logout}:{state:Workspace;reload:()=>Promise<void>;log
             <div>
               <p className="eyebrow">TUDO EM SEU LUGAR</p>
               <h1>
-                Produtos e estoque<span>.</span>
+                {navigationItems.find(item => item.id === view)?.title}<span>.</span>
               </h1>
               <p className="subtitle">
-                Uma visão clara do que sua loja precisa.
+                {view === 'dashboard' ? 'Acompanhe os resultados da sua rede.' : view === 'users' ? 'Gerencie os acessos da sua rede.' : 'Uma visão clara do que sua loja precisa.'}
               </p>
             </div>
           </div>
-          <div className="store-bar">
+          <div className="store-bar" hidden={view === 'dashboard'}>
             <label htmlFor="store">VOCÊ ESTÁ EM</label>
             <select
               id="store"
@@ -80,7 +81,7 @@ function App({state,reload,logout}:{state:Workspace;reload:()=>Promise<void>;log
               {state.stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          <div className="action-bar"><button className="secondary" onClick={()=>{void reload().then(()=>setMessage("Lista atualizada.")).catch(e=>setMessage(e.message));}}>Atualizar</button>{state.role==='admin'&&<><button className="secondary" onClick={()=>setCreating('store')}>Nova loja</button><button className="primary" disabled={!store} onClick={()=>setCreating('product')}>Novo produto</button></>}</div>
+          <div className="action-bar" hidden={view === 'dashboard'}><button className="secondary" onClick={()=>{void reload().then(()=>setMessage("Lista atualizada.")).catch(e=>setMessage(e.message));}}>Atualizar</button>{state.role==='admin'&&<><button className="secondary" onClick={()=>setCreating('store')}>Nova loja</button><button className="primary" disabled={!store} onClick={()=>setCreating('product')}>Novo produto</button></>}</div>
           <div hidden={view!=='inventory'} className="metrics">
             <article>
               <span>Produtos cadastrados</span>
@@ -189,6 +190,7 @@ function App({state,reload,logout}:{state:Workspace;reload:()=>Promise<void>;log
           </section>
           <section hidden={view!=='stores'} className="stores-list" aria-label="Lojas da rede">{state.stores.map(s=><article className="store-card" key={s.id}><p>LOJA DA REDE</p><h2>{s.name}</h2><p>{s.productCount} produtos · {s.units} unidades em estoque</p><button className="secondary" onClick={()=>{setStore(s.id);setView('inventory');}}>Abrir estoque</button></article>)}</section>
           {state.role==='admin'&&<section hidden={view!=='users'}><UserManagement stores={state.stores}/></section>}
+          {state.role === 'admin' && <section hidden={view !== 'dashboard'}><Dashboard stores={state.stores}/></section>}
           <p role="status">{message}</p>
         </main>
       </div>
